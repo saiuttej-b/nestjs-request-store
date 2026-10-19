@@ -1,6 +1,6 @@
 {
   "name": "@saiuttej/nestjs-request-store",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Nestjs Request Store is a library that provides a simple and efficient way to manage request-scoped data in NestJS applications. It allows you to store and retrieve data specific to each HTTP request, making it easy to share information across different parts of your application without relying on global state or passing data through multiple layers of your code.",
   "author": "B Sai Uttej",
   "license": "MIT",
