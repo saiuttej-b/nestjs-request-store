@@ -1,69 +1,54 @@
-import { DynamicModule, Module } from '@nestjs/common';
-import { AsyncLocalStorage } from 'node:async_hooks';
+import { DynamicModule, Inject, MiddlewareConsumer, Module, type NestModule } from '@nestjs/common';
+import { installedMiddlewarePath } from './http-wildcard';
+import { RequestStoreMiddleware } from './request-store.middleware';
+import {
+  REQUEST_STORE_OPTIONS,
+  type RequestStoreModuleOptions,
+  type ResolvedRequestStoreModuleOptions,
+} from './request-store.options';
 import { RequestStoreService } from './request-store.service';
 
 /**
- * AsyncLocalStorage instance to store request scoped data
- */
-const store = new AsyncLocalStorage();
-
-/**
- * Get the store data
- *
- * @throws {BadRequestException} If the store is not initialized
- * @returns {Map<string, unknown>} The store data
- */
-function getStore(): Map<string, unknown> {
-  const data = store.getStore();
-  if (!data) {
-    throw new Error('Request store is not initialized');
-  }
-  return data as Map<string, unknown>;
-}
-
-/**
- * Sets a value in the store.
- *
- * @param {string} key - The key to set.
- * @param {unknown} value - The value to set.
- * @returns {void}
- */
-function set(key: string, value: unknown): void {
-  getStore().set(key, value);
-}
-
-/**
- * Gets a value from the store.
- *
- * @template T
- * @param {string} key - The key to get.
- * @returns {T | undefined} The value or undefined if not found.
- */
-function get<T>(key: string): T | undefined {
-  const data = store.getStore() as Map<string, unknown>;
-  if (!data) return;
-  return data.get(key) as T;
-}
-
-/**
- * Request store module
- * It provides a request scoped store to store data that can be accessed in the same request.
- * It also provides a service to interact with the store.
- * It also provides a middleware to initialize the store
+ * Provides {@link RequestStoreService}.
+ * Call `forRoot` to register it. HTTP middleware is off unless `http` is true.
  */
 @Module({})
-export class RequestStoreModule {
-  static forRoot(props: { isGlobal?: boolean }): DynamicModule {
+export class RequestStoreModule implements NestModule {
+  constructor(
+    @Inject(REQUEST_STORE_OPTIONS)
+    private readonly options: ResolvedRequestStoreModuleOptions,
+  ) {}
+
+  /**
+   * Registers request middleware when `http` is enabled.
+   */
+  configure(consumer: MiddlewareConsumer): void {
+    if (!this.options.http) {
+      return;
+    }
+
+    consumer.apply(RequestStoreMiddleware).forRoutes(installedMiddlewarePath());
+  }
+
+  /**
+   * Registers the request store.
+   * `isGlobal` and `http` both default to `false`.
+   */
+  static forRoot(options?: RequestStoreModuleOptions): DynamicModule {
+    const resolved: ResolvedRequestStoreModuleOptions = {
+      isGlobal: options?.isGlobal ?? false,
+      http: options?.http ?? false,
+    };
+
     return {
       module: RequestStoreModule,
+      global: resolved.isGlobal,
       providers: [
-        {
-          provide: RequestStoreService,
-          useFactory: () => new RequestStoreService({ getStore, set, get, storage: store }),
-        },
+        { provide: REQUEST_STORE_OPTIONS, useValue: resolved },
+        RequestStoreService,
+        RequestStoreMiddleware,
       ],
       exports: [RequestStoreService],
-      global: props.isGlobal ?? false,
     };
   }
 }

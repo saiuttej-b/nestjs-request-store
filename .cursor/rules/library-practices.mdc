@@ -1,0 +1,27 @@
+---
+description: NestJS request-store API and test conventions
+globs: src/**/*.ts
+alwaysApply: false
+---
+
+# Library practices
+
+`session()` is the core API. HTTP middleware is opt-in through `RequestStoreModule.forRoot({ http: true })` and must call `session()`. Do not enter `AsyncLocalStorage` a second way.
+
+- Call `storage.run` synchronously inside `session()`. No `await` before it, or HTTP middleware loses the context.
+- `getValue`, `setValue`, `getOrThrow`, `has`, `delete`, and `clear` throw `RequestStoreNotInitializedError` when no session is active.
+- Inside a session, a missing key makes `getValue` return `undefined` and `getOrThrow` throw `RequestStoreKeyNotFoundError`.
+- Type keys on the service, not on `forRoot`: `RequestStoreService<{ userId: string }>`. The default stays `Record<string, any>`.
+- `inherit: true` shallow-copies the parent map. Object values stay shared.
+
+Public exports belong in `src/request-store/index.ts`: the module, the service, the module options type, and the two errors. Do not export the storage singleton, middleware, or wildcard helper.
+
+```typescript
+// Prefer this
+export { RequestStoreService } from './request-store.service';
+
+// Not this
+export { requestContext } from './request-store.storage';
+```
+
+Put tests in `src/request-store/__tests__/`, not beside source files. Import the public API from `src/index.ts`. Keep `strict` TypeScript. Build with `tsc -p tsconfig.build.json` so specs are not emitted.
